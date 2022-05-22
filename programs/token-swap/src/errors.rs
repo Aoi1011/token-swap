@@ -124,3 +124,9 @@ pub enum SwapError {
     #[msg("The operation cannot be performed on the given curve")]
     UnsupportedCurveOperation,
 }
+
+impl From<SwapError> for ProgramError {
+    fn from(e: SwapError) -> Self {
+        ProgramError::Custom(e as u32)
+    }
+}
