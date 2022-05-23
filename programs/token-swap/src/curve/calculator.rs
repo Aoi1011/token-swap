@@ -371,4 +371,65 @@ pub mod test {
             difference
         );
     }
+
+    /// Test function checking that a swap never reduces the overall value of the pool.
+    ///
+    /// Since curve calculations use unsigned integers, there is potential for
+    /// truncation at some point, meaning a potential for value to be lost in
+    /// either direction if too much is given to the swapper.
+    ///
+    /// This test gurantees that the relative change in value will be at most
+    /// 1 normalized token, and that the value will never decrease from a trade
+    pub fn check_curve_value_from_swap(
+        curve: &dyn CurveCalculator,
+        source_token_amount: u128,
+        swap_source_amount: u128,
+        swap_destination_amount: u128,
+        trade_direction: TradeDirection,
+    ) {
+        let results = curve
+            .swap_without_fees(
+                source_token_amount,
+                swap_source_amount,
+                swap_destination_amount,
+                trade_direction,
+            )
+            .unwrap();
+
+        let (swap_token_a_amount, swap_token_b_amount) = match trade_direction {
+            TradeDirection::AtoB => (swap_source_amount, swap_destination_amount),
+            TradeDirection::BtoA => (swap_destination_amount, swap_source_amount),
+        };
+
+        let previous_value = curve
+            .normalized_value(swap_token_a_amount, swap_token_b_amount)
+            .unwrap();
+
+        let new_swap_source_amount = swap_source_amount
+            .checked_add(results.source_amount_swapped)
+            .unwrap();
+
+        let new_swap_destination_amount = swap_destination_amount
+            .checked_sub(results.destination_amount_swapped)
+            .unwrap();
+
+        let (swap_token_a_amount, swap_token_b_amount) = match trade_direction {
+            TradeDirection::AtoB => (new_swap_source_amount, new_swap_destination_amount),
+            TradeDirection::BtoA => (new_swap_destination_amount, new_swap_source_amount),
+        };
+
+        let new_value = curve
+            .normalized_value(swap_token_a_amount, swap_token_b_amount)
+            .unwrap();
+        assert!(new_value.greater_than_or_equal(&previous_value));
+
+        let epsilon = 1; // Extremely close!
+        let difference = new_value
+            .checked_sub(&previous_value)
+            .unwrap()
+            .to_imprecise()
+            .unwrap();
+
+        assert!(difference <= epsilon);
+    }
 }
