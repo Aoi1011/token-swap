@@ -483,4 +483,57 @@ pub mod test {
                 >= swap_token_b_amount * new_pool_token_supply
         );
     }
+
+    /// Test function checking that a withdraw never reduces the value of pool tokens.
+    ///
+    /// Since curve calculations use unsigned intergers, there is poterntial for
+    /// trancation at some point, meaning a poterntial for value to be lost if
+    /// too much is given to the depositor.
+    pub fn check_pool_value_from_withdraw(
+        curve: &dyn CurveCalculator,
+        pool_token_amount: u128,
+        pool_token_supply: u128,
+        swap_token_a_amount: u128,
+        swap_token_b_amount: u128,
+    ) {
+        let withdraw_result = curve
+            .pool_tokens_to_trading_tokens(
+                pool_token_amount,
+                pool_token_supply,
+                swap_token_a_amount,
+                swap_token_b_amount,
+                RoundDirection::Floor,
+            )
+            .unwrap();
+        let new_swap_token_a_amount = swap_token_a_amount - withdraw_result.token_a_amount;
+        let new_swap_token_b_amount = swap_token_b_amount - withdraw_result.token_b_amount;
+        let new_pool_token_supply = pool_token_supply - pool_token_amount;
+
+        let value = curve
+            .normalized_value(swap_token_a_amount, swap_token_b_amount)
+            .unwrap();
+        // since we can get rounding issues on the pool value which make it seem that the
+        // value per token has gone down, we bump it up by an eppsilon of 1 to
+        // cover all cases
+        let new_value = curve
+            .normalized_value(new_swap_token_a_amount, new_swap_token_b_amount)
+            .unwrap();
+
+        // the following inequally must hold:
+        // new_pool_value / new_pool_token_supply >= pool_value / pool_token_supply
+        // which can alst be written:
+        // new_pool_value * pool_token_supply >= pool_value * new_pool_token_supply
+        let pool_token_supply = PreciseNumber::new(pool_token_supply).unwrap();
+        let new_pool_token_supply = PreciseNumber::new(new_pool_token_supply).unwrap();
+        assert!(new_value
+            .checked_mul(&pool_token_supply)
+            .unwrap()
+            .greater_than_or_equal(&value.checked_mul(&new_pool_token_supply).unwrap()));
+    }
+
+    prop_compose! {
+        pub fn total_and_intermediate()(total in 1..u64::MAX)(intermediate in 1..total, total in Just(total)) -> (u64, u64) {
+            (total, intermediate)
+        }
+    }
 }
