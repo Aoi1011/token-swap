@@ -286,4 +286,89 @@ pub mod test {
             difference
         );
     }
+
+    /// Test function to check that withdrawing token A is the same as withdrawing
+    /// both and swapping one side.
+    /// Since calculations use unsigned integers, there will be truncation at
+    /// some point, meaning we can't have perfect equality.
+    /// We gurantee that the relative errror between withdrawing one side and
+    /// performing a withdraw plus a swap will be at most some epsilon provided by
+    /// the curve. Most curves gurantee accuracy within 0.5%.
+    pub fn check_withdraw_token_conversion(
+        curve: &dyn CurveCalculator,
+        pool_token_amount: u128,
+        pool_token_supply: u128,
+        swap_token_a_amount: u128,
+        swap_token_b_amount: u128,
+        trade_direction: TradeDirection,
+        epsilon_in_basis_points: u128,
+    ) {
+        // Withdraw the pool tokens
+        let withdraw_result = curve
+            .pool_tokens_to_trading_tokens(
+                pool_token_amount,
+                pool_token_supply,
+                swap_token_a_amount,
+                swap_token_b_amount,
+                RoundDirection::Floor,
+            )
+            .unwrap();
+
+        let new_swap_token_a_amount = swap_token_a_amount - withdraw_result.token_a_amount;
+        let new_swap_token_b_amount = swap_token_b_amount - withdraw_result.token_b_amount;
+
+        // Swap one side of them
+        let source_token_amount = match trade_direction {
+            TradeDirection::AtoB => {
+                let results = curve
+                    .swap_without_fees(
+                        withdraw_result.token_a_amount,
+                        new_swap_token_a_amount,
+                        new_swap_token_b_amount,
+                        trade_direction,
+                    )
+                    .unwrap();
+                withdraw_result.token_b_amount + results.destination_amount_swapped
+            }
+            TradeDirection::BtoA => {
+                let results = curve
+                    .swap_without_fees(
+                        withdraw_result.token_b_amount,
+                        new_swap_token_b_amount,
+                        new_swap_token_a_amount,
+                        trade_direction,
+                    )
+                    .unwrap();
+                withdraw_result.token_a_amount + results.destination_amount_swapped
+            }
+        };
+
+        // see how many pool tokens it would cost to withdraw onw side for the
+        // tatal amount of tokens, should be close!
+        let opposite_direction = trade_direction.opposite();
+        let pool_token_amount_from_single_side_withdraw = curve
+            .withdraw_single_token_type_exact_out(
+                source_token_amount,
+                swap_token_a_amount,
+                swap_token_b_amount,
+                pool_token_supply,
+                opposite_direction,
+            )
+            .unwrap();
+
+        // slippage due to rounding or truncation errors
+        let epsilon = std::cmp::max(1, pool_token_amount * epsilon_in_basis_points / 10_000);
+        let difference = if pool_token_amount >= pool_token_amount_from_single_side_withdraw {
+            pool_token_amount - pool_token_amount_from_single_side_withdraw
+        } else {
+            pool_token_amount_from_single_side_withdraw - pool_token_amount
+        };
+
+        assert!(
+            difference <= epsilon,
+            "difference expected to be less than {}, actually {}",
+            epsilon,
+            difference
+        );
+    }
 }
