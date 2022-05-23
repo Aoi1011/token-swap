@@ -67,3 +67,31 @@ pub struct SwapWithoutFeesResult {
     /// Amount of destination token swapped
     pub destination_amount_swapped: u128,
 }
+
+/// Encodes results of depositing both sides at once
+#[derive(Debug, PartialEq)]
+pub struct TradingTokenResult {
+    /// Amount of token A
+    pub token_a_amount: u128,
+    /// Amount of token B
+    pub token_b_amount: u128,
+}
+
+/// Trait for packing of trait objects, required because structs that implement
+/// `Pack` cannot be used as trait objects (as `dyn Pack`)
+pub trait DynPack {
+    fn pack_into_slice(&self, dst: &mut [u8]);
+}
+
+/// Trait representing operations required on a swap curve
+pub trait CurveCalculator: Debug + DynPack {
+    /// Calculate how much destination token will be provided given an amount
+    /// of course token.
+    fn swap_without_fees(
+        &self,
+        source_amount: u128,
+        swap_source_amount: u128,
+        swap_destination_amount: u128,
+        trade_direction: TradeDirection,
+    ) -> Option<SwapWithoutFeesResult>;
+}
