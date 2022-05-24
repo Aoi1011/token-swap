@@ -84,7 +84,7 @@ pub trait DynPack {
 }
 
 /// Trait representing operations required on a swap curve
-pub trait CurveCalculator: Debug + DynPack {
+pub trait CurveCalculator: Debug  {
     /// Calculate how much destination token will be provided given an amount
     /// of course token.
     fn swap_without_fees(
