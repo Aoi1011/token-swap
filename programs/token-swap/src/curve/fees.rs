@@ -1,8 +1,5 @@
 use crate::errors::SwapError;
-use anchor_lang::solana_program::{
-    program_error::ProgramError,
-    program_pack::{IsInitialized, Pack, Sealed},
-};
+use anchor_lang::*;
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use std::convert::TryFrom;
 
@@ -56,5 +53,70 @@ pub fn calculate_fee(
         } else {
             Some(fee)
         }
+    }
+}
+
+fn validate_fraction(numerator: u64, denominator: u64) -> Result<()> {
+    if denominator == 0 && numerator == 0 {
+        Ok(())
+    } else if numerator >= denominator {
+        Err(SwapError::InvalidFee.into())
+    } else {
+        Ok(())
+    }
+}
+
+impl Fees {
+    /// Calculates the withdraw fee in pool tokens
+    pub fn owner_withdraw_fee(&self, pool_tokens: u128) -> Option<u128> {
+        calculate_fee(
+            pool_tokens,
+            u128::try_from(self.owner_withdraw_fee_numerator).ok()?,
+            u128::try_from(self.owner_withdraw_fee_denominator).ok()?,
+        )
+    }
+
+    /// Calculate the trading fee in pool tokens
+    pub fn trading_fee(&self, trading_tokens: u128) -> Option<u128> {
+        calculate_fee(
+            trading_tokens,
+            u128::try_from(self.trade_fee_numerator).ok()?,
+            u128::try_from(self.trade_fee_denominator).ok()?,
+        )
+    }
+
+    /// Calculate the owner trading fee in trading tokens
+    pub fn owner_trading_fee(&self, trading_tokens: u128) -> Option<u128> {
+        calculate_fee(
+            trading_tokens,
+            u128::try_from(self.owner_trade_fee_numerator).ok()?,
+            u128::try_from(self.owner_trade_fee_denominator).ok()?,
+        )
+    }
+
+    /// Calculate the host fee based on the owner fee, only used in production
+    /// situation where a program is hosted by multiple frontend
+    pub fn host_fee(&self, owner_fee: u128) -> Option<u128> {
+        calculate_fee(
+            owner_fee,
+            u128::try_from(self.host_fee_numerator).ok()?,
+            u128::try_from(self.host_fee_denominator).ok()?,
+        )
+    }
+
+    /// Validate that the fees are reasonable
+    pub fn validate(&self) -> Result<()> {
+        validate_fraction(self.trade_fee_numerator, self.trade_fee_denominator)?;
+        validate_fraction(
+            self.owner_trade_fee_numerator,
+            self.owner_trade_fee_denominator,
+        )?;
+        validate_fraction(
+            self.owner_withdraw_fee_numerator,
+            self.owner_withdraw_fee_denominator,
+        )?;
+        validate_fraction(self.host_fee_numerator, self.host_fee_denominator)?;
+
+        Ok(())
     }
 }
