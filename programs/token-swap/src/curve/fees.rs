@@ -1,6 +1,6 @@
 use crate::errors::SwapError;
 use anchor_lang::solana_program::program_pack::{IsInitialized, Pack, Sealed};
-use anchor_lang::*;
+use anchor_lang::prelude::*;
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use std::convert::TryFrom;
 

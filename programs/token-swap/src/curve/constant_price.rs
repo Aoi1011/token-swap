@@ -6,6 +6,7 @@ use {
         },
         errors::SwapError,
     },
+    anchor_lang::prelude::*,
     anchor_lang::solana_program::program_error::ProgramError,
     arrayref::{array_mut_ref, array_ref},
     spl_math::{checked_ceil_div::CheckedCeilDiv, precise_number::PreciseNumber, uint::U256},
@@ -57,12 +58,12 @@ impl CurveCalculator for ConstantPriceCurve {
     /// Constant price curve always returns 1:1
     fn swap_without_fees(
         &self,
-        source_amount: u128,
-        _swap_source_amount: u128,
-        _swap_destination_amount: u128,
+        source_amount: u128,            // 100
+        _swap_source_amount: u128,      // 0
+        _swap_destination_amount: u128, // 0
         trade_direction: TradeDirection,
     ) -> Option<SwapWithoutFeesResult> {
-        let token_b_price = self.token_b_price as u128;
+        let token_b_price = self.token_b_price as u128; // 1
 
         let (source_amount_swapped, destination_amount_swapped) = match trade_direction {
             TradeDirection::BtoA => (source_amount, source_amount.checked_mul(token_b_price)?),
@@ -87,6 +88,10 @@ impl CurveCalculator for ConstantPriceCurve {
         })
     }
 
+    /// Get the amount of trading tokens for the given amount of pool tokens,
+    /// provided the total trading tokens and supply of pool tokens.
+    /// For the constant price curve, the total value of the pool is weighted
+    /// by the price of token B
     fn pool_tokens_to_trading_tokens(
         &self,
         pool_tokens: u128,
@@ -128,5 +133,91 @@ impl CurveCalculator for ConstantPriceCurve {
             token_a_amount,
             token_b_amount,
         })
+    }
+
+    /// Get the amount of pool tokens for the given amount of token A and B
+    /// For the constant price curve, the total value of the pool is weighted
+    /// by the price of token B
+    fn deposit_single_token_type(
+        &self,
+        source_amount: u128,
+        swap_token_a_amount: u128,
+        swap_token_b_amount: u128,
+        pool_supply: u128,
+        trade_direction: TradeDirection,
+    ) -> Option<u128> {
+        trading_tokens_to_pool_tokens(
+            self.token_b_price,
+            source_amount,
+            swap_token_a_amount,
+            swap_token_b_amount,
+            pool_supply,
+            trade_direction,
+            RoundDirection::Floor,
+        )
+    }
+
+    fn withdraw_single_token_type_exact_out(
+        &self,
+        source_amount: u128,
+        swap_token_a_amount: u128,
+        swap_token_b_amount: u128,
+        pool_supply: u128,
+        trade_direction: TradeDirection,
+    ) -> Option<u128> {
+        trading_tokens_to_pool_tokens(
+            self.token_b_price,
+            source_amount,
+            swap_token_a_amount,
+            swap_token_b_amount,
+            pool_supply,
+            trade_direction,
+            RoundDirection::Ceiling,
+        )
+    }
+
+    fn validate(&self) -> Result<()> {
+        if self.token_b_price == 0 {
+            Err(SwapError::InvalidCurve.into())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_supply(&self, token_a_amount: u64, token_b_amount: u64) -> Result<()> {
+        if token_a_amount == 0 {
+            return Err(SwapError::EmptySupply.into());
+        }
+        Ok(())
+    }
+
+    /// The total normalized value of the constant price curve adds the total
+    /// value of the token B side to the token A side.
+    ///
+    /// Note that since most other curves use a multiplicative invariant, ie.
+    /// `token_a * token_b`, whereas this one uses an addition,
+    /// ie. `token_a + token_b`
+    ///
+    /// At the end, we divide by 2 to normalized the value between the two token
+    /// types
+    fn normalized_value(
+        &self,
+        swap_token_a_amount: u128,
+        swap_token_b_amount: u128,
+    ) -> Option<PreciseNumber> {
+        let swap_token_b_value = swap_token_b_amount.checked_mul(self.token_b_price as u128)?;
+        // special logic in case we're close to the limits, avoid overflow u128
+        let value = if swap_token_b_value.saturating_sub(std::u64::MAX.into())
+            > (std::u128::MAX.saturating_sub(std::u64::MAX.into()))
+        {
+            swap_token_b_value
+                .checked_div(2)?
+                .checked_add(swap_token_a_amount.checked_div(2)?)?
+        } else {
+            swap_token_a_amount
+                .checked_add(swap_token_b_value)?
+                .checked_div(2)?
+        };
+        PreciseNumber::new(value)
     }
 }

@@ -1,6 +1,9 @@
 //! Swap calculations
 
-use {crate::errors::SwapError, spl_math::precise_number::PreciseNumber, std::fmt::Debug};
+use {
+    crate::errors::SwapError, anchor_lang::prelude::*, spl_math::precise_number::PreciseNumber,
+    std::fmt::Debug,
+};
 
 #[cfg(feature = "fuzz")]
 use arbitrary::Arbitrary;
@@ -84,7 +87,7 @@ pub trait DynPack {
 }
 
 /// Trait representing operations required on a swap curve
-pub trait CurveCalculator: Debug  {
+pub trait CurveCalculator: Debug {
     /// Calculate how much destination token will be provided given an amount
     /// of course token.
     fn swap_without_fees(
@@ -143,18 +146,18 @@ pub trait CurveCalculator: Debug  {
     ) -> Option<u128>;
 
     /// Validate that the given curve has no invalid parameters
-    fn validate(&self) -> Result<(), SwapError>;
+    fn validate(&self) -> Result<()>;
 
     /// Validate the given supply on initialization. This is useful for curves
     /// that allow zero supply on one or both sides, since the standard constant
     /// product curve must have a non-zero supply on both sides
-    fn validate_supply(&self, token_a_amount: u64, token_b_amount: u64) -> Result<(), SwapError> {
+    fn validate_supply(&self, token_a_amount: u64, token_b_amount: u64) -> Result<()> {
         if token_a_amount == 0 {
-            return Err(SwapError::EmptySupply);
+            return Err(SwapError::EmptySupply.into());
         }
 
         if token_b_amount == 0 {
-            return Err(SwapError::EmptySupply);
+            return Err(SwapError::EmptySupply.into());
         }
 
         Ok(())
