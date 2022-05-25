@@ -72,8 +72,10 @@ impl CurveCalculator for ConstantPriceCurve {
                 let mut source_amount_swapped = source_amount;
 
                 let remainder = source_amount_swapped.checked_rem(token_b_price)?;
+                println!("remainder {:?}", remainder);
                 if remainder > 0 {
                     source_amount_swapped = source_amount.checked_sub(remainder)?;
+                    println!("source_amount_swapped {:?}", source_amount_swapped);
                 }
 
                 (source_amount_swapped, destination_amount_swapped)
@@ -219,5 +221,84 @@ impl CurveCalculator for ConstantPriceCurve {
                 .checked_div(2)?
         };
         PreciseNumber::new(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::curve::calculator::{
+        test::{
+            check_curve_value_from_swap, check_deposit_token_conversion,
+            check_withdraw_token_conversion, total_and_intermediate,
+            CONVERSION_BASIS_POINTS_GURANTEE,
+        },
+        INITIAL_SWAP_POOL_AMOUNT,
+    };
+    use proptest::prelude::*;
+
+    #[test]
+    fn swap_calculation_on_price() {
+        let swap_source_amount: u128 = 0;
+        let swap_destination_amount: u128 = 0;
+        let source_amount: u128 = 100;
+        let token_b_price = 1;
+        let curve = ConstantPriceCurve { token_b_price };
+
+        let expected_result = SwapWithoutFeesResult {
+            source_amount_swapped: source_amount,
+            destination_amount_swapped: source_amount,
+        };
+
+        let result = curve
+            .swap_without_fees(
+                source_amount,
+                swap_source_amount,
+                swap_destination_amount,
+                TradeDirection::BtoA,
+            )
+            .unwrap();
+
+        // println!("BtoA {:?}", result);
+
+        assert_eq!(result, expected_result);
+
+        let result = curve
+            .swap_without_fees(
+                source_amount,
+                swap_source_amount,
+                swap_destination_amount,
+                TradeDirection::AtoB,
+            )
+            .unwrap();
+
+        println!("AtoB {:?}", result);
+
+        assert_eq!(result, expected_result);
+    }
+
+    // #[test]
+    // fn pack_flat_curve() {
+    //     let token_b_price = 1_251_258;
+    //     let curve = ConstantPriceCurve { token_b_price };
+
+    //     let mut 
+    // }
+
+    #[test]
+    fn swap_calculation_large_price() {
+        let token_b_price = 1123513_u128;
+        let curve = ConstantPriceCurve {
+            token_b_price: token_b_price as u64
+        };
+        let token_b_amount = 500_u128;
+        let token_a_amount = token_b_amount * token_b_price;
+        let bad_result = curve.swap_without_fees(
+            token_b_price - 1_u128, 
+            token_a_amount, 
+            token_b_amount, 
+            TradeDirection::AtoB
+        );
+        assert!(bad_result.is_none());
     }
 }
