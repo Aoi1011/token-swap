@@ -39,3 +39,48 @@ pub fn swap(
         destination_amount_swapped,
     })
 }
+
+/// Get the amount of trading tokens for the given amount of pool tokens,
+/// provided the total trading tokens and supply of pool tokens.
+///
+/// The constant product implementation is a simple ratio calculation for how many
+/// trading tokens correspond to a certain number of pool tokens
+pub fn pool_tokens_to_trading_tokens(
+    pool_tokens: u128,
+    pool_token_supply: u128,
+    swap_token_a_amount: u128,
+    swap_token_b_amount: u128,
+    round_direction: RoundDirection,
+) -> Option<TradingTokenResult> {
+    let mut token_a_amount = pool_tokens
+        .checked_mul(swap_token_a_amount)?
+        .checked_div(pool_token_supply)?;
+    let mut token_b_amount = pool_tokens
+        .checked_mul(swap_token_b_amount)?
+        .checked_div(pool_token_supply)?;
+    let (token_a_amount, token_b_amount) = match round_direction {
+        RoundDirection::Floor => (token_a_amount, token_b_amount),
+        RoundDirection::Ceiling => {
+            let token_a_remainder = pool_tokens
+                .checked_mul(swap_token_a_amount)?
+                .checked_rem(pool_token_supply)?;
+
+            if token_a_remainder > 0 && token_a_amount > 0 {
+                token_a_amount += 1;
+            }
+            let token_b_remainder = pool_tokens
+                .checked_mul(swap_token_b_amount)?
+                .checked_rem(pool_token_supply)?;
+            if token_b_remainder > 0 && token_b_amount > 0 {
+                token_b_amount += 1;
+            }
+
+            (token_a_amount, token_b_amount)
+        }
+    };
+
+    Some(TradingTokenResult {
+        token_a_amount,
+        token_b_amount,
+    })
+}
