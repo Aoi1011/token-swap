@@ -616,8 +616,6 @@ mod tests {
             let pool_token_supply = PreciseNumber::new(pool_token_supply).unwrap();
             let new_pool_token_supply = PreciseNumber::new(new_pool_token_supply).unwrap();
             assert!(new_value.checked_mul(&pool_token_supply).unwrap().greater_than_or_equal(&value.checked_mul(&new_pool_token_supply).unwrap()));
-
-
         }
     }
 }
