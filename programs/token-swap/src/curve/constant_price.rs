@@ -470,4 +470,109 @@ mod tests {
             );
         }
     }
+
+    proptest! {
+        #[test]
+        fn curve_value_does_not_decrease_from_swap_a_to_b(
+            source_token_amount in 1..u64::MAX,
+            swap_source_amount in 1..u64::MAX,
+            swap_destination_amount in 1..u64::MAX,
+            token_b_price in 1..u64::MAX,
+        ) {
+            // make sure that the trade yields at least 1 token B
+            prop_assume!(source_token_amount / token_b_price >= 1);
+            // make sure there's enough tokens to get back on the other side
+            prop_assume!(source_token_amount / token_b_price <= swap_destination_amount);
+
+            let curve = ConstantPriceCurve {token_b_price};
+            check_curve_value_from_swap(
+                &curve,
+                source_token_amount as u128,
+                swap_source_amount as u128,
+                swap_destination_amount as u128,
+                TradeDirection::AtoB
+            );
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn curve_value_does_not_decrease_from_swap_b_to_a(
+            source_token_amount in 1..u32::MAX,
+            swap_source_amount in 1..u64::MAX,
+            swap_destination_amount in 1..u64::MAX,
+            token_b_price in 1..u32::MAX,
+        ) {
+            // The constant price curve needs to have enough destination amount
+            // on the other side to complete the swap
+            let curve = ConstantPriceCurve {token_b_price: token_b_price as u64};
+            let token_b_price = token_b_price as u128;
+            let source_token_amount = source_token_amount as u128;
+            let swap_destination_amount = swap_destination_amount as u128;
+            let swap_source_amount = swap_source_amount as u128;
+
+            prop_assume!(token_b_price * source_token_amount <= swap_destination_amount);
+
+            check_curve_value_from_swap(
+                &curve,
+                source_token_amount,
+                swap_source_amount,
+                swap_destination_amount,
+                TradeDirection::BtoA,
+            );
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn curve_value_does_not_decrease_from_deposit(
+            pool_token_amount in 2..u64::MAX,
+            pool_token_supply in INITIAL_SWAP_POOL_AMOUNT..u64::MAX as u128,
+            swap_token_a_amount in 1..u64::MAX,
+            swap_token_b_amount in 1..u32::MAX,
+            token_b_price in 1..u32::MAX,
+        ) {
+            let curve = ConstantPriceCurve {token_b_price: token_b_price as u64};
+            let pool_token_amount = pool_token_amount as u128;
+            let pool_token_supply = pool_token_supply as u128;
+            let swap_token_a_amount = swap_token_a_amount as u128;
+            let swap_token_b_amount = swap_token_b_amount as u128;
+            let token_b_price = token_b_price as u128;
+
+            let value = curve.normalized_value(swap_token_a_amount, swap_token_b_amount).unwrap();
+
+            // make sure we trade at leat one of each token
+            prop_assume!(pool_token_amount * value.to_imprecise().unwrap() >= 2 * token_b_price * pool_token_supply);
+            let deposit_result = curve
+                .pool_tokens_to_trading_tokens(
+                    pool_token_amount,
+                    pool_token_supply,
+                    swap_token_a_amount,
+                    swap_token_b_amount,
+                    RoundDirection::Ceiling
+                ).unwrap();
+            let new_swap_token_a_amount = swap_token_a_amount + deposit_result.token_a_amount;
+            let new_swap_token_b_amount = swap_token_b_amount + deposit_result.token_b_amount;
+            let new_pool_token_supply = pool_token_supply + pool_token_amount;
+
+            let new_value = curve.normalized_value(new_swap_token_a_amount, new_swap_token_b_amount).unwrap();
+
+            // the following inequally must hold:
+            // new_value / new_pool_token_supply >= value / pool_token_supply
+            // which reduces to
+            // new_value * pool_token_supply >= value * new_pool_token_supply
+
+            let pool_token_supply = PreciseNumber::new(pool_token_supply).unwrap();
+            let new_pool_token_supply = PreciseNumber::new(new_pool_token_supply).unwrap();
+            // let value = U256::from(value);
+            // let new_value = U256::from(new_value);
+
+            assert!(
+                new_value.checked_mul(&pool_token_supply)
+                .unwrap()
+                .greater_than_or_equal(&value.checked_mul(&new_pool_token_supply).unwrap())
+            );
+
+        }
+    }
 }

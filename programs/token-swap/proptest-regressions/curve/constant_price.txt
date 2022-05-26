@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 52f1fa8bd9344c94fbb71181fe254dafb9b652c735217b8d249c51add4285b3f # shrinks to pool_token_amount = 19547163824, pool_token_supply = 1000000000, swap_token_a_amount = 13186386999429569664, swap_token_b_amount = 8742048706613717302, token_b_price = 3982652972
