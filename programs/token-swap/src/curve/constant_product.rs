@@ -84,3 +84,21 @@ pub fn pool_tokens_to_trading_tokens(
         token_b_amount,
     })
 }
+
+/// Get the amount of pool tokens for the deposited amount of token A or B
+///
+/// The constant product implementation uses the Balancer formulas found at
+/// in the case for 2 tokens, each weighted at 1/2.
+pub fn deposit_single_token_type(
+    source_amount: u128,
+    swap_token_a_amount: u128,
+    swap_token_b_amount: u128,
+    pool_supply: u128,
+    trade_direction: TradeDirection,
+    round_direction: RoundDirection,
+) -> Option<u128> {
+    let swap_source_amount = match trade_direction {
+        TradeDirection::AtoB => swap_token_a_amount,
+        TradeDirection::BtoA => swap_token_b_amount,
+    };
+}
