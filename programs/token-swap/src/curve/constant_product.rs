@@ -101,4 +101,16 @@ pub fn deposit_single_token_type(
         TradeDirection::AtoB => swap_token_a_amount,
         TradeDirection::BtoA => swap_token_b_amount,
     };
+    let swap_source_amount = PreciseNumber::new(swap_source_amount)?;
+    let source_amount = PreciseNumber::new(source_amount)?;
+    let ratio = source_amount.checked_div(&swap_source_amount)?;
+    let one = PreciseNumber::new(1)?;
+    let base = one.checked_add(&ratio)?;
+    let root = base.sqrt()?.checked_sub(&one)?;
+    let pool_supply = PreciseNumber::new(pool_supply)?;
+    let pool_tokens = pool_supply.checked_mul(&root)?;
+    match round_direction {
+        RoundDirection::Floor => pool_tokens.floor()?.to_imprecise(),
+        RoundDirection::Ceiling => pool_tokens.ceiling()?.to_imprecise(),
+    }
 }
