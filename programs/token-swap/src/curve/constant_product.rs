@@ -114,3 +114,33 @@ pub fn deposit_single_token_type(
         RoundDirection::Ceiling => pool_tokens.ceiling()?.to_imprecise(),
     }
 }
+
+/// Get the amount of pool tokens for the withdrawn amount of token A or B.
+///
+/// The constant product implementaion uses the Balancer formulas found at
+/// in the case for 2 tokens, each weighted at 1/2
+pub fn withdraw_single_token_type_exact_out(
+    source_amount: u128,
+    swap_token_a_amount: u128,
+    swap_token_b_amount: u128,
+    pool_supply: u128,
+    trade_direction: TradeDirection,
+    round_direction: RoundDirection,
+) -> Option<u128> {
+    let swap_source_amount = match trade_direction {
+        TradeDirection::AtoB => swap_token_a_amount,
+        TradeDirection::BtoA => swap_token_b_amount,
+    };
+    let swap_source_amount = PreciseNumber::new(swap_source_amount)?;
+    let source_amount = PreciseNumber::new(source_amount)?;
+    let ratio = source_amount.checked_div(&swap_source_amount)?;
+    let one = PreciseNumber::new(1)?;
+    let base = one.checked_sub(&ratio)?;
+    let root = one.checked_sub(&base.sqrt()?)?;
+    let pool_supply = PreciseNumber::new(pool_supply)?;
+    let pool_tokens = pool_supply.checked_mul(&root)?;
+    match round_direction {
+        RoundDirection::Floor => pool_tokens.floor()?.to_imprecise(),
+        RoundDirection::Ceiling => pool_tokens.ceiling()?.to_imprecise(),
+    }
+}
