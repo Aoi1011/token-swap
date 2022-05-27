@@ -144,3 +144,18 @@ pub fn withdraw_single_token_type_exact_out(
         RoundDirection::Ceiling => pool_tokens.ceiling()?.to_imprecise(),
     }
 }
+
+/// Calculates the total normalized value of the curve given the liquidity parameters
+///
+/// The constant product implementation for this function gives the square root of
+/// the Uniswap invariant
+pub fn normalized_value(
+    swap_token_a_amount: u128,
+    swap_token_b_amount: u128,
+) -> Option<PreciseNumber> {
+    let swap_token_a_amount = PreciseNumber::new(swap_token_a_amount)?;
+    let swap_token_b_amount = PreciseNumber::new(swap_token_b_amount)?;
+    swap_token_a_amount
+        .checked_mul(&swap_token_b_amount)?
+        .sqrt()
+}
