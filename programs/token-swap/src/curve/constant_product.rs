@@ -6,7 +6,7 @@ use {
         },
         errors::SwapError,
     },
-    anchor_lang::solana_program::program_error::ProgramError,
+    anchor_lang::{prelude::*, solana_program::program_error::ProgramError},
     spl_math::{checked_ceil_div::CheckedCeilDiv, precise_number::PreciseNumber},
 };
 
@@ -158,4 +158,85 @@ pub fn normalized_value(
     swap_token_a_amount
         .checked_mul(&swap_token_b_amount)?
         .sqrt()
+}
+
+impl CurveCalculator for ConstantProductCurve {
+    /// Constant product swap ensures x * y = constant
+    fn swap_without_fees(
+        &self,
+        source_amount: u128,
+        swap_source_amount: u128,
+        swap_destination_amount: u128,
+        _trade_direction: TradeDirection,
+    ) -> Option<SwapWithoutFeesResult> {
+        swap(source_amount, swap_source_amount, swap_destination_amount)
+    }
+
+    /// The constant product implementation is a simple ratio calculation for how many
+    /// trading tokens correspond to a certain number of pool tokens
+    fn pool_tokens_to_trading_tokens(
+        &self,
+        pool_tokens: u128,
+        pool_token_supply: u128,
+        swap_token_a_amount: u128,
+        swap_token_b_amount: u128,
+        round_direction: RoundDirection,
+    ) -> Option<TradingTokenResult> {
+        pool_tokens_to_trading_tokens(
+            pool_tokens,
+            pool_token_supply,
+            swap_token_a_amount,
+            swap_token_b_amount,
+            round_direction,
+        )
+    }
+
+    /// Get the amount of pool tokens for the deposited amount of token A or B
+    fn deposit_single_token_type(
+        &self,
+        source_amount: u128,
+        swap_token_a_amount: u128,
+        swap_token_b_amount: u128,
+        pool_supply: u128,
+        trade_direction: TradeDirection,
+    ) -> Option<u128> {
+        deposit_single_token_type(
+            source_amount,
+            swap_token_a_amount,
+            swap_token_b_amount,
+            pool_supply,
+            trade_direction,
+            RoundDirection::Floor,
+        )
+    }
+
+    fn withdraw_single_token_type_exact_out(
+        &self,
+        source_amount: u128,
+        swap_token_a_amount: u128,
+        swap_token_b_amount: u128,
+        pool_supply: u128,
+        trade_direction: TradeDirection,
+    ) -> Option<u128> {
+        withdraw_single_token_type_exact_out(
+            source_amount,
+            swap_token_a_amount,
+            swap_token_b_amount,
+            pool_supply,
+            trade_direction,
+            RoundDirection::Ceiling,
+        )
+    }
+
+    fn normalized_value(
+        &self,
+        swap_token_a_amount: u128,
+        swap_token_b_amount: u128,
+    ) -> Option<PreciseNumber> {
+        normalized_value(swap_token_a_amount, swap_token_b_amount)
+    }
+
+    fn validate(&self) -> Result<()> {
+        Ok(())
+    }
 }
