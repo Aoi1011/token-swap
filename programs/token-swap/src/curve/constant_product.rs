@@ -68,9 +68,12 @@ pub fn pool_tokens_to_trading_tokens(
             if token_a_remainder > 0 && token_a_amount > 0 {
                 token_a_amount += 1;
             }
+
             let token_b_remainder = pool_tokens
                 .checked_mul(swap_token_b_amount)?
                 .checked_rem(pool_token_supply)?;
+
+            // println!("{:?}", token_b_remainder);
             if token_b_remainder > 0 && token_b_amount > 0 {
                 token_b_amount += 1;
             }
@@ -238,5 +241,197 @@ impl CurveCalculator for ConstantProductCurve {
 
     fn validate(&self) -> Result<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::curve::calculator::{
+        test::{
+            check_curve_value_from_swap, check_deposit_token_conversion,
+            check_pool_value_from_deposit, check_pool_value_from_withdraw,
+            check_withdraw_token_conversion, total_and_intermediate,
+            CONVERSION_BASIS_POINTS_GURANTEE,
+        },
+        RoundDirection, INITIAL_SWAP_POOL_AMOUNT,
+    };
+    use proptest::prelude::*;
+
+    #[test]
+    fn initial_pool_amount() {
+        let calculator = ConstantProductCurve {};
+        assert_eq!(calculator.new_pool_supply(), INITIAL_SWAP_POOL_AMOUNT);
+    }
+
+    fn check_pool_token_rate(
+        token_a: u128,
+        token_b: u128,
+        deposit: u128,
+        supply: u128,
+        expected_a: u128,
+        expected_b: u128,
+    ) {
+        let calculator = ConstantProductCurve {};
+        let results = calculator
+            .pool_tokens_to_trading_tokens(
+                deposit,
+                supply,
+                token_a,
+                token_b,
+                RoundDirection::Ceiling,
+            )
+            .unwrap();
+        assert_eq!(results.token_a_amount, expected_a);
+        assert_eq!(results.token_b_amount, expected_b);
+    }
+
+    #[test]
+    fn trading_token_conversion() {
+        check_pool_token_rate(2, 49, 5, 10, 1, 25);
+        check_pool_token_rate(100, 202, 5, 101, 5, 10);
+        check_pool_token_rate(5, 501, 2, 10, 1, 101);
+    }
+
+    #[test]
+    fn fail_trading_token_coversion() {
+        let calculator = ConstantProductCurve {};
+        let results =
+            calculator.pool_tokens_to_trading_tokens(5, 10, u128::MAX, 0, RoundDirection::Floor);
+        assert!(results.is_none());
+
+        let results = pool_tokens_to_trading_tokens(5, 10, 0, u128::MAX, RoundDirection::Floor);
+        assert!(results.is_none());
+    }
+
+    proptest! {
+        #[test]
+        fn deposit_token_conversion(
+            // in the pool token conversion calcs, we simulate trading half of
+            // source_token_amount, so this needs to be at least 2
+            source_token_amount in 2..u64::MAX,
+            swap_source_amount in 1..u64::MAX,
+            swap_destination_amount in 1..u64::MAX,
+            pool_supply in INITIAL_SWAP_POOL_AMOUNT..u64::MAX as u128,
+        ) {
+                let curve = ConstantProductCurve {};
+                check_deposit_token_conversion(
+                    &curve,
+                    source_token_amount as u128,
+                    swap_source_amount as u128,
+                    swap_destination_amount as u128,
+                    TradeDirection::AtoB,
+                    pool_supply,
+                    CONVERSION_BASIS_POINTS_GURANTEE
+                );
+
+                check_deposit_token_conversion(
+                    &curve,
+                    source_token_amount as u128,
+                    swap_source_amount as u128,
+                    swap_destination_amount as u128,
+                    TradeDirection::BtoA,
+                    pool_supply,
+                    CONVERSION_BASIS_POINTS_GURANTEE
+                );
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn withdraw_token_conversion((pool_token_supply, pool_token_amount) in total_and_intermediate(), swap_token_a_amount in 1..u64::MAX, swap_token_b_amount in 1..u64::MAX) {
+            let curve = ConstantProductCurve {};
+            check_withdraw_token_conversion(
+                &curve,
+                pool_token_amount as u128,
+                pool_token_supply as u128,
+                swap_token_a_amount as u128,
+                swap_token_b_amount as u128,
+                TradeDirection::AtoB,
+                CONVERSION_BASIS_POINTS_GURANTEE
+            );
+
+            check_withdraw_token_conversion(
+                &curve,
+                pool_token_amount as u128,
+                pool_token_supply as u128,
+                swap_token_a_amount as u128,
+                swap_token_b_amount as u128,
+                TradeDirection::BtoA,
+                CONVERSION_BASIS_POINTS_GURANTEE
+            );
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn curve_value_does_not_decrease_from_swap(
+            source_token_amount in 1..u64::MAX,
+            swap_source_amount in 1..u64::MAX,
+            swap_destination_amount in 1..u64::MAX,
+        ) {
+            let curve = ConstantProductCurve {};
+            check_curve_value_from_swap(
+                &curve,
+                source_token_amount as u128,
+                swap_source_amount as u128,
+                swap_destination_amount as u128,
+                TradeDirection::AtoB
+            );
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn curve_value_does_not_decrease_from_deposit(
+            pool_token_amount in 1..u64::MAX,
+            pool_token_supply in 1..u64::MAX,
+            swap_token_a_amount in 1..u64::MAX,
+            swap_token_b_amount in 1..u64::MAX,
+        ) {
+            let pool_token_amount = pool_token_amount as u128;
+            let pool_token_supply = pool_token_supply as u128;
+            let swap_token_a_amount = swap_token_a_amount as u128;
+            let swap_token_b_amount = swap_token_b_amount as u128;
+
+            // Make sure we will get at least one trading token out for each
+            // side, otherwise the calculation fails
+            prop_assume!(pool_token_amount * swap_token_a_amount / pool_token_supply >= 1);
+            prop_assume!(pool_token_amount * swap_token_b_amount / pool_token_supply >= 1);
+            let curve = ConstantProductCurve {};
+            check_pool_value_from_deposit(
+                &curve,
+                pool_token_amount,
+                pool_token_supply,
+                swap_token_a_amount,
+                swap_token_b_amount
+            );
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn curve_value_does_not_decrease_from_withdraw(
+            (pool_token_supply, pool_token_amount) in total_and_intermediate(),
+            swap_token_a_amount in 1..u64::MAX,
+            swap_token_b_amount in 1..u64::MAX,
+        ) {
+            let pool_token_amount = pool_token_amount as u128;
+            let pool_token_supply = pool_token_supply as u128;
+            let swap_token_a_amount = swap_token_a_amount as u128;
+            let swap_token_b_amount = swap_token_b_amount as u128;
+
+            prop_assume!(pool_token_amount * swap_token_a_amount / pool_token_supply >= 1);
+            prop_assume!(pool_token_amount * swap_token_b_amount / pool_token_supply >= 1);
+
+            let curve = ConstantProductCurve {};
+            check_pool_value_from_deposit(
+                &curve,
+                pool_token_amount,
+                pool_token_supply,
+                swap_token_a_amount,
+                swap_token_b_amount
+            );
+        }
     }
 }
