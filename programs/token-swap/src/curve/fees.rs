@@ -1,5 +1,5 @@
 use crate::errors::SwapError;
-use anchor_lang::solana_program::program_pack::{IsInitialized, Pack, Sealed};
+use anchor_lang::{solana_program::program_pack::{IsInitialized, Pack, Sealed}, prelude::ProgramError};
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use std::convert::TryFrom;
 
@@ -134,6 +134,7 @@ impl Pack for Fees {
    const LEN: usize = 64;
 
    fn pack_into_slice(&self, output: &mut [u8]) {
+
        let output = array_mut_ref![output, 0, 64];
        let (
            trade_fee_numerator,
@@ -145,39 +146,84 @@ impl Pack for Fees {
            host_fee_numerator,
            host_fee_denominator,
        ) = mut_array_refs![output, 8, 8, 8, 8, 8, 8, 8, 8];
-       *trade_fee_numerator = self.trade_fee_numerator.to_le_bytes();
-       *trade_fee_denominator = self.trade_fee_denominator.to_le_bytes();
-       *owner_trade_fee_numerator = self.owner_trade_fee_numerator.to_le_bytes();
-       *owner_trade_fee_denominator = self.owner_trade_fee_denominator.to_le_bytes();
-       *owner_withdraw_fee_numerator = self.owner_withdraw_fee_numerator.to_le_bytes();
-
-
+        *trade_fee_numerator = self.trade_fee_numerator.to_le_bytes();
+        *trade_fee_denominator = self.trade_fee_denominator.to_le_bytes();
+        *owner_trade_fee_numerator = self.owner_trade_fee_numerator.to_le_bytes();
+        *owner_trade_fee_denominator = self.owner_trade_fee_denominator.to_le_bytes();
+        *owner_withdraw_fee_numerator = self.owner_withdraw_fee_numerator.to_le_bytes();
+        *owner_withdraw_fee_denominator= self.owner_withdraw_fee_denominator.to_le_bytes();
+        *host_fee_numerator = self.host_fee_numerator.to_le_bytes();
+        *host_fee_denominator = self.host_fee_denominator.to_le_bytes();
    }
 
-   fn unpack_from_slice(input: &[u8]) -> Result<Fees> {
-       Ok()
+   fn unpack_from_slice(input: &[u8]) -> Result<Fees, ProgramError> {
+       let input = array_ref![input, 0, 64];
+       #[allow(clippy::ptr_offset_with_cast)]
+       let (
+            trade_fee_numerator,
+            trade_fee_denominator, 
+            owner_trade_fee_numerator,
+            owner_trade_fee_denominator,
+            owner_withdraw_fee_numerator,
+            owner_withdraw_fee_denominator,
+            host_fee_numerator,
+            host_fee_denominator,
+        ) = array_refs![input, 8, 8, 8, 8, 8, 8, 8, 8];
+       Ok(Self {
+             trade_fee_numerator: u64::from_le_bytes(*trade_fee_numerator),
+             trade_fee_denominator: u64::from_le_bytes(*trade_fee_denominator),
+             owner_trade_fee_numerator: u64::from_le_bytes(*owner_trade_fee_numerator),
+             owner_trade_fee_denominator: u64::from_le_bytes(*owner_trade_fee_denominator),
+             owner_withdraw_fee_numerator: u64::from_le_bytes(*owner_withdraw_fee_numerator),
+             owner_withdraw_fee_denominator: u64::from_le_bytes(*owner_withdraw_fee_denominator),
+             host_fee_numerator: u64::from_le_bytes(*host_fee_numerator),
+             host_fee_denominator: u64::from_le_bytes(*host_fee_denominator),
+       })
    }
 }
 
 
 #[cfg(test)]
 mod tests {
-    use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
+    use super::*;
 
-    fn write_u16(bytes: &mut [u8; 2], num: u16) {
-        bytes[0] = num as u8;
-        bytes[1] = (num >> 8) as u8;
+   #[test]
+    fn pack_fees() {
+        let trade_fee_numerator = 1;
+        let trade_fee_denominator = 4;
+        let owner_trade_fee_numerator = 2;
+        let owner_trade_fee_denominator = 5;
+        let owner_withdraw_fee_numerator = 4;
+        let owner_withdraw_fee_denominator = 10;
+        let host_fee_numerator = 7;
+        let host_fee_denominator = 100;
+        let fees = Fees {
+            trade_fee_numerator,
+            trade_fee_denominator,
+            owner_trade_fee_numerator,
+            owner_trade_fee_denominator,
+            owner_withdraw_fee_numerator,
+            owner_withdraw_fee_denominator,
+            host_fee_numerator,
+            host_fee_denominator,
+        };
+
+        let mut packed = [0u8; Fees::LEN];
+        Pack::pack_into_slice(&fees, &mut packed[..]);
+        let unpacked = Fees::unpack_from_slice(&packed).unwrap();
+        assert_eq!(fees, unpacked);
+
+        let mut packed = vec![];
+        packed.extend_from_slice(&trade_fee_numerator.to_le_bytes());
+        packed.extend_from_slice(&trade_fee_denominator.to_le_bytes());
+        packed.extend_from_slice(&owner_trade_fee_numerator.to_le_bytes());
+        packed.extend_from_slice(&owner_trade_fee_denominator.to_le_bytes());
+        packed.extend_from_slice(&owner_withdraw_fee_numerator.to_le_bytes());
+        packed.extend_from_slice(&owner_withdraw_fee_denominator.to_le_bytes());
+        packed.extend_from_slice(&host_fee_numerator.to_le_bytes());
+        packed.extend_from_slice(&host_fee_denominator.to_le_bytes());
+        let unpacked = Fees::unpack_from_slice(&packed).unwrap();
+        assert_eq!(fees, unpacked);
     }
 
-    #[test]
-    fn test_arrayref() {
-        let mut data = [0, 1, 2, 3, 4, 0, 6, 7, 8, 9];
-        write_u16(array_mut_ref![data, 0, 2], 1);
-        println!("1: {:?}", data); // [1, 0, 2, 3, 4, 0, 6, 7, 8, 9]
-
-        write_u16(array_mut_ref![data, 2, 2], 5); // [1, 0, 5, 0, 4, 0, 6, 7, 8, 9]
-        println!("2: {:?}", data);
-
-        assert_eq!(*array_ref![data, 0, 4], [1, 0, 5, 0]);
-    }
 }

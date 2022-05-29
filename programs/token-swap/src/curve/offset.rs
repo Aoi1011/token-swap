@@ -13,7 +13,6 @@ use {
         errors::SwapError,
     },
     arrayref::{array_mut_ref, array_ref},
-    anchor_lang::prelude::*,
     spl_math::precise_number::PreciseNumber,
 };
 
@@ -113,7 +112,7 @@ impl CurveCalculator for Offset {
         )
     }
 
-    fn validate(&self) -> Result<()> {
+    fn validate(&self) -> Result<(), SwapError> {
        if self.token_b_offset == 0 {
             Err(SwapError::InvalidCurve.into())
        } else {
@@ -121,9 +120,9 @@ impl CurveCalculator for Offset {
        }
     }
 
-    fn validate_supply(&self, token_a_amount: u64, token_b_amount: u64) -> Result<()> {
+    fn validate_supply(&self, token_a_amount: u64, token_b_amount: u64) -> Result<(), SwapError> {
         if token_a_amount == 0 {
-            return Err(SwapError::EmptySupply.into());
+            return Err(SwapError::EmptySupply);
         }
         Ok(())
     }

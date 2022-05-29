@@ -6,7 +6,7 @@ use {
         },
         errors::SwapError,
     },
-    anchor_lang::{prelude::*, solana_program::program_error::ProgramError},
+    anchor_lang::solana_program::program_error::ProgramError,
     spl_math::{checked_ceil_div::CheckedCeilDiv, precise_number::PreciseNumber},
 };
 
@@ -239,7 +239,7 @@ impl CurveCalculator for ConstantProductCurve {
         normalized_value(swap_token_a_amount, swap_token_b_amount)
     }
 
-    fn validate(&self) -> Result<()> {
+    fn validate(&self) -> Result<(), SwapError> {
         Ok(())
     }
 }
