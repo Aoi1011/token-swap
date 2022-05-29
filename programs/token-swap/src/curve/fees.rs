@@ -130,30 +130,36 @@ impl IsInitialized for Fees {
 
 impl Sealed for Fees {}
 
-// impl Sealed for Fees {}
-// impl Pack for Fees {
-//     const LEN: usize = 64;
+impl Pack for Fees {
+   const LEN: usize = 64;
 
-//     fn pack_into_slice(&self, output: &mut [u8]) {
-//         let output = array_mut_ref![output, 0, 64];
-//         let (
-//             trade_fee_numerator,
-//             trade_fee_denominator,
-//             owner_trade_fee_numerator,
-//             owner_trade_fee_denominator,
-//             owner_withdraw_fee_numerator,
-//             owner_withdraw_fee_denominator,
-//             host_fee_numerator,
-//             host_fee_denominator,
-//         ) = mut_array_refs![output, 8, 8, 8, 8, 8, 8, 8, 8];
-//         *trade_fee_numerator = self.trade_fee_numerator.to_le_bytes();
+   fn pack_into_slice(&self, output: &mut [u8]) {
+       let output = array_mut_ref![output, 0, 64];
+       let (
+           trade_fee_numerator,
+           trade_fee_denominator,
+           owner_trade_fee_numerator,
+           owner_trade_fee_denominator,
+           owner_withdraw_fee_numerator,
+           owner_withdraw_fee_denominator,
+           host_fee_numerator,
+           host_fee_denominator,
+       ) = mut_array_refs![output, 8, 8, 8, 8, 8, 8, 8, 8];
+       *trade_fee_numerator = self.trade_fee_numerator.to_le_bytes();
+       *trade_fee_denominator = self.trade_fee_denominator.to_le_bytes();
+       *owner_trade_fee_numerator = self.owner_trade_fee_numerator.to_le_bytes();
+       *owner_trade_fee_denominator = self.owner_trade_fee_denominator.to_le_bytes();
+       *owner_withdraw_fee_numerator = self.owner_withdraw_fee_numerator.to_le_bytes();
 
-//     }
 
-//     fn unpack_from_slice(input: &[u8]) -> Result<Fees> {
-//         Ok()
-//     }
-// }
+   }
+
+   fn unpack_from_slice(input: &[u8]) -> Result<Fees> {
+       Ok()
+   }
+}
+
+
 #[cfg(test)]
 mod tests {
     use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
