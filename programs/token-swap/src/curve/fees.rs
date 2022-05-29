@@ -1,6 +1,5 @@
 use crate::errors::SwapError;
 use anchor_lang::solana_program::program_pack::{IsInitialized, Pack, Sealed};
-use anchor_lang::prelude::*;
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use std::convert::TryFrom;
 
@@ -57,11 +56,11 @@ pub fn calculate_fee(
     }
 }
 
-fn validate_fraction(numerator: u64, denominator: u64) -> Result<()> {
+fn validate_fraction(numerator: u64, denominator: u64) -> Result<(), SwapError> {
     if denominator == 0 && numerator == 0 {
         Ok(())
     } else if numerator >= denominator {
-        Err(SwapError::InvalidFee.into())
+        Err(SwapError::InvalidFee)
     } else {
         Ok(())
     }
@@ -106,7 +105,7 @@ impl Fees {
     }
 
     /// Validate that the fees are reasonable
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> Result<(), SwapError> {
         validate_fraction(self.trade_fee_numerator, self.trade_fee_denominator)?;
         validate_fraction(
             self.owner_trade_fee_numerator,
@@ -128,6 +127,8 @@ impl IsInitialized for Fees {
         true
     }
 }
+
+impl Sealed for Fees {}
 
 // impl Sealed for Fees {}
 // impl Pack for Fees {

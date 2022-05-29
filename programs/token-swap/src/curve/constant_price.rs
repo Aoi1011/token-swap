@@ -6,8 +6,10 @@ use {
         },
         errors::SwapError,
     },
-    anchor_lang::prelude::*,
-    anchor_lang::solana_program::program_error::ProgramError,
+    anchor_lang::solana_program::{
+        program_error::ProgramError, 
+        program_pack::{Pack, IsInitialized, Sealed}, 
+    },
     arrayref::{array_mut_ref, array_ref},
     spl_math::{checked_ceil_div::CheckedCeilDiv, precise_number::PreciseNumber, uint::U256},
 };
@@ -178,7 +180,7 @@ impl CurveCalculator for ConstantPriceCurve {
         )
     }
 
-    fn validate(&self) -> Result<()> {
+    fn validate(&self) -> Result<(), SwapError> {
         if self.token_b_price == 0 {
             Err(SwapError::InvalidCurve.into())
         } else {
@@ -186,7 +188,7 @@ impl CurveCalculator for ConstantPriceCurve {
         }
     }
 
-    fn validate_supply(&self, token_a_amount: u64, token_b_amount: u64) -> Result<()> {
+    fn validate_supply(&self, token_a_amount: u64, token_b_amount: u64) -> Result<(), SwapError> {
         if token_a_amount == 0 {
             return Err(SwapError::EmptySupply.into());
         }
@@ -221,6 +223,37 @@ impl CurveCalculator for ConstantPriceCurve {
                 .checked_div(2)?
         };
         PreciseNumber::new(value)
+    }
+}
+
+/// IsInitialized is required to use `Pack::pack` and `Pack::unpack`
+impl IsInitialized for ConstantPriceCurve {
+    fn is_initialized(&self) -> bool {
+        true
+    }
+}
+
+impl Sealed for ConstantPriceCurve {}
+
+impl Pack for ConstantPriceCurve {
+    const LEN: usize = 8;
+
+    fn pack_into_slice(&self, output: &mut [u8]) {
+        (self as &dyn DynPack).pack_into_slice(output);
+    }
+
+    fn unpack_from_slice(input: &[u8]) -> Result<ConstantPriceCurve, ProgramError> {
+        let token_b_price = array_ref![input, 0, 8];
+        Ok(Self {
+            token_b_price: u64::from_le_bytes(*token_b_price),
+        })
+    }
+}
+
+impl DynPack for ConstantPriceCurve {
+    fn pack_into_slice(&self, dst: &mut [u8]) {
+        let token_b_price = array_mut_ref![dst, 0, 8];
+        *token_b_price = self.token_b_price.to_le_bytes();
     }
 }
 
@@ -277,13 +310,21 @@ mod tests {
         assert_eq!(result, expected_result);
     }
 
-    // #[test]
-    // fn pack_flat_curve() {
-    //     let token_b_price = 1_251_258;
-    //     let curve = ConstantPriceCurve { token_b_price };
+    #[test]
+    fn pack_flat_curve() {
+         let token_b_price = 1_251_258;
+         let curve = ConstantPriceCurve { token_b_price };
 
-    //     let mut
-    // }
+         let mut packed = [0u8; ConstantPriceCurve::LEN];
+         Pack::pack_into_slice(&curve, &mut packed[..]);
+         let unpacked = ConstantPriceCurve::unpack(&packed).unwrap();
+         assert_eq!(curve, unpacked);
+
+         let mut packed = vec![];
+         packed.extend_from_slice(&token_b_price.to_le_bytes());
+         let unpacked = ConstantPriceCurve::unpack(&packed).unwrap();
+         assert_eq!(curve, unpacked);
+     }
 
     #[test]
     fn swap_calculation_large_price() {
@@ -615,7 +656,18 @@ mod tests {
 
             let pool_token_supply = PreciseNumber::new(pool_token_supply).unwrap();
             let new_pool_token_supply = PreciseNumber::new(new_pool_token_supply).unwrap();
-            assert!(new_value.checked_mul(&pool_token_supply).unwrap().greater_than_or_equal(&value.checked_mul(&new_pool_token_supply).unwrap()));
+            assert!(
+                new_value
+                    .checked_mul(&pool_token_supply)
+                    .unwrap()
+                    .greater_than_or_equal(
+                        &value
+                        .checked_mul(
+                            &new_pool_token_supply
+                        )
+                        .unwrap()
+                    )
+            );
         }
     }
 }

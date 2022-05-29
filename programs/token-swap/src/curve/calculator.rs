@@ -1,7 +1,8 @@
 //! Swap calculations
 
 use {
-    crate::errors::SwapError, anchor_lang::prelude::*, spl_math::precise_number::PreciseNumber,
+    crate::errors::SwapError, 
+    spl_math::precise_number::PreciseNumber,
     std::fmt::Debug,
 };
 
@@ -146,18 +147,18 @@ pub trait CurveCalculator: Debug {
     ) -> Option<u128>;
 
     /// Validate that the given curve has no invalid parameters
-    fn validate(&self) -> Result<()>;
+    fn validate(&self) -> Result<(), SwapError>;
 
     /// Validate the given supply on initialization. This is useful for curves
     /// that allow zero supply on one or both sides, since the standard constant
     /// product curve must have a non-zero supply on both sides
-    fn validate_supply(&self, token_a_amount: u64, token_b_amount: u64) -> Result<()> {
+    fn validate_supply(&self, token_a_amount: u64, token_b_amount: u64) -> Result<(), SwapError> {
         if token_a_amount == 0 {
-            return Err(SwapError::EmptySupply.into());
+            return Err(SwapError::EmptySupply);
         }
 
         if token_b_amount == 0 {
-            return Err(SwapError::EmptySupply.into());
+            return Err(SwapError::EmptySupply);
         }
 
         Ok(())

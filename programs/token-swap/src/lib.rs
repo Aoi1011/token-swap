@@ -15,8 +15,5 @@ pub mod token_swap {
 }
 
 #[derive(Accounts)]
-pub struct Initialize {
-    let string = "Hello".to_string();
-
-}
+pub struct Initialize {}
 
